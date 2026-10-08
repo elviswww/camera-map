@@ -3,9 +3,9 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>台灣省道測速照相取締地圖 (OpenStreetMap)</title>
+  <title>台灣省道測速照相取締地圖 (免 API Key · OpenStreetMap)</title>
 
-  <!-- Tailwind CSS -->
+  <!-- Tailwind CSS (CDN - 免金鑰) -->
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
     tailwind.config = {
@@ -13,12 +13,12 @@
         extend: {
           colors: {
             brand: {
-              50: '#eff6ff',
-              100: '#dbeafe',
-              500: '#3b82f6',
-              600: '#2563eb',
-              700: '#1d4ed8',
-              800: '#1e40af',
+              50: '#f0f9ff',
+              100: '#e0f2fe',
+              500: '#0284c7',
+              600: '#0369a1',
+              700: '#075985',
+              800: '#0c4a6e',
               900: '#0f172a'
             }
           }
@@ -27,16 +27,16 @@
     };
   </script>
 
-  <!-- Leaflet CSS & JS -->
+  <!-- Leaflet CSS & JS (開源免金鑰) -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
 
-  <!-- Leaflet MarkerCluster CSS & JS -->
+  <!-- Leaflet MarkerCluster (開源免金鑰) -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
   <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
 
-  <!-- PapaParse for local CSV parsing -->
+  <!-- PapaParse for local in-browser CSV parsing (開源免金鑰) -->
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
 
   <!-- Font Awesome Icons -->
@@ -56,62 +56,78 @@
       width: 100%;
       z-index: 10;
     }
+    /* 自訂相機圖標樣式 */
     .custom-cam-pin {
-      width: 32px;
-      height: 32px;
+      width: 30px;
+      height: 30px;
       background: #dc2626;
-      border: 2.5px solid #ffffff;
+      border: 2px solid #ffffff;
       border-radius: 9999px;
       color: #ffffff;
       display: flex;
       align-items: center;
       justify-content: center;
       box-shadow: 0 4px 10px rgba(0, 0, 0, 0.35);
-      transition: transform 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+      transition: transform 0.15s ease-out;
     }
     .custom-cam-pin:hover {
       transform: scale(1.22);
       background: #b91c1c;
     }
     .custom-cam-pin i {
-      font-size: 14px;
+      font-size: 13px;
     }
-    /* MarkerCluster Theme Tweaks */
+    /* 標記聚合主題樣式微調 */
     .marker-cluster-small {
-      background-color: rgba(239, 68, 68, 0.3) !important;
+      background-color: rgba(239, 68, 68, 0.25) !important;
     }
     .marker-cluster-small div {
-      background-color: rgba(220, 38, 38, 0.85) !important;
+      background-color: rgba(220, 38, 38, 0.9) !important;
       color: #ffffff !important;
       font-weight: 700;
     }
     .marker-cluster-medium {
-      background-color: rgba(217, 119, 6, 0.3) !important;
+      background-color: rgba(217, 119, 6, 0.25) !important;
     }
     .marker-cluster-medium div {
-      background-color: rgba(217, 119, 6, 0.85) !important;
+      background-color: rgba(217, 119, 6, 0.9) !important;
       color: #ffffff !important;
       font-weight: 700;
     }
     .marker-cluster-large {
-      background-color: rgba(37, 99, 235, 0.3) !important;
+      background-color: rgba(3, 105, 161, 0.25) !important;
     }
     .marker-cluster-large div {
-      background-color: rgba(29, 78, 216, 0.85) !important;
+      background-color: rgba(2, 132, 199, 0.9) !important;
       color: #ffffff !important;
       font-weight: 700;
     }
-    /* Leaflet popup overrides */
+    /* 彈出視窗樣式優化 */
     .leaflet-popup-content-wrapper {
       padding: 0;
       border-radius: 12px;
       overflow: hidden;
-      box-shadow: 0 12px 30px -4px rgba(0, 0, 0, 0.25);
+      box-shadow: 0 16px 36px -6px rgba(0, 0, 0, 0.3);
     }
     .leaflet-popup-content {
       margin: 0;
       width: 340px !important;
       max-width: 90vw !important;
+    }
+    /* 自訂捲軸 */
+    ::-webkit-scrollbar {
+      width: 5px;
+      height: 5px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #f1f5f9;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #cbd5e1;
+      border-radius: 9999px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #94a3b8;
     }
   </style>
 </head>
@@ -127,23 +143,23 @@
         <div class="flex items-center gap-2">
           <h1 class="text-base sm:text-lg font-bold tracking-tight">全台省道測速照相取締地圖</h1>
           <span class="text-[11px] font-semibold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 px-2 py-0.5 rounded-full">
-            OpenStreetMap 底圖
+            免 API Key · OpenStreetMap
           </span>
         </div>
-        <p class="text-xs text-slate-400 hidden sm:block">交通部公路局警52標誌圖資 · 嚴格保持原資料欄位完整度</p>
+        <p class="text-xs text-slate-400 hidden sm:block">交通部公路局警52標誌圖資 · 純前端瀏覽器解析 · 忠實保留23個原始欄位</p>
       </div>
     </div>
 
     <div class="flex items-center gap-2 sm:gap-3">
-      <!-- File input button -->
+      <!-- 載入自訂 CSV 按鈕 (免任何伺服器/API Key) -->
       <label class="cursor-pointer bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-semibold py-1.5 px-3 rounded-lg flex items-center gap-2 transition duration-150">
-        <i class="fa-solid fa-folder-open text-sky-400"></i>
-        <span class="hidden md:inline">載入原始 CSV 檔</span>
+        <i class="fa-solid fa-file-csv text-sky-400"></i>
+        <span class="hidden md:inline">載入自有 CSV 檔</span>
         <span class="md:hidden">載入CSV</span>
         <input type="file" id="csvFileInput" accept=".csv" class="hidden" />
       </label>
 
-      <!-- Sidebar toggle button -->
+      <!-- 側邊欄切換開關 -->
       <button id="toggleSidebarBtn" class="bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold py-1.5 px-3 rounded-lg flex items-center gap-1.5 transition duration-150 shadow-sm">
         <i class="fa-solid fa-bars-staggered"></i>
         <span class="hidden sm:inline">側邊欄</span>
@@ -152,12 +168,12 @@
   </header>
 
   <div class="relative flex-1 flex overflow-hidden">
-    <!-- LEFT SIDEBAR -->
+    <!-- 側邊欄：搜尋、篩選選單與卡片清單 -->
     <aside id="sidebar" class="w-full sm:w-96 md:w-[420px] bg-slate-50 border-r border-slate-200 flex flex-col shrink-0 z-20 transition-all duration-300 ease-in-out absolute md:relative h-full shadow-2xl md:shadow-none">
       
-      <!-- Filters header panel -->
+      <!-- 篩選面板 -->
       <div class="p-4 bg-white border-b border-slate-200 space-y-3">
-        <!-- Keyword Search -->
+        <!-- 關鍵字搜尋 -->
         <div class="relative">
           <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
           <input
@@ -171,7 +187,7 @@
           </button>
         </div>
 
-        <!-- County & Highway Dropdown -->
+        <!-- 縣市與路線選單 -->
         <div class="grid grid-cols-2 gap-2 text-xs">
           <div>
             <label class="block text-slate-500 font-medium mb-1">隸屬縣市</label>
@@ -187,7 +203,7 @@
           </div>
         </div>
 
-        <!-- Direction & Reset Filter -->
+        <!-- 方向選單與重設按鈕 -->
         <div class="grid grid-cols-2 gap-2 text-xs">
           <div>
             <label class="block text-slate-500 font-medium mb-1">牌面方向</label>
@@ -206,32 +222,33 @@
           </div>
         </div>
 
-        <!-- Stats Counter -->
+        <!-- 統計數據 -->
         <div class="flex items-center justify-between text-xs pt-1 border-t border-slate-100 text-slate-500">
           <div>
             顯示 <span id="filteredCount" class="font-bold text-blue-600">0</span> / 總計 <span id="totalCount" class="font-medium text-slate-700">0</span> 處
           </div>
           <div id="dataStatusIndicator" class="flex items-center gap-1.5 text-emerald-600 font-medium">
             <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-            <span id="dataStatusText">預設示範圖資</span>
+            <span id="dataStatusText">內建省道圖資</span>
           </div>
         </div>
       </div>
 
-      <!-- Point Cards List Container -->
+      <!-- 測速照相卡片列表 -->
       <div id="cardsContainer" class="flex-1 overflow-y-auto p-3 space-y-2.5">
-        <!-- Rendered via JS -->
+        <!-- 透過 JS 注入 -->
       </div>
 
       <div class="p-2.5 bg-slate-100 border-t border-slate-200 text-[11px] text-slate-500 text-center">
-        💡 點選清單項目會自動平滑移動並展開聚合標記
+        💡 點擊清單項目將平滑移動並自動展開群聚標記
       </div>
     </aside>
 
+    <!-- 地圖主區域 -->
     <main class="flex-1 relative h-full">
       <div id="map"></div>
 
-      <!-- Floating Map Quick Tools -->
+      <!-- 懸浮捷徑工具列 -->
       <div class="absolute bottom-6 right-6 z-[1000] flex flex-col space-y-2">
         <button id="locateMeBtn" title="定位我的位置" class="bg-white hover:bg-slate-50 text-slate-700 w-10 h-10 rounded-xl shadow-lg border border-slate-200 flex items-center justify-center transition">
           <i class="fa-solid fa-location-crosshairs text-blue-600"></i>
@@ -241,18 +258,18 @@
         </button>
       </div>
 
-      <!-- Loading Spinner Modal -->
+      <!-- 讀取遮罩 -->
       <div id="loadingOverlay" class="absolute inset-0 bg-slate-900/40 backdrop-blur-[2px] z-[2000] flex flex-col items-center justify-center text-white hidden">
         <div class="bg-slate-900 border border-slate-800 p-6 rounded-2xl shadow-2xl flex flex-col items-center">
           <div class="w-10 h-10 border-4 border-blue-400 border-t-transparent rounded-full animate-spin mb-3"></div>
-          <p id="loadingMessage" class="text-xs font-semibold tracking-wide">資料讀取與坐標投影分析中...</p>
+          <p id="loadingMessage" class="text-xs font-semibold tracking-wide">資料讀取與空間坐標分析中...</p>
         </div>
       </div>
     </main>
   </div>
 
   <script>
-    // 預設精選示範圖資（完全符合交通部公路局標準 CSV 欄位名稱）
+    // 預設內建完整官方 23 個欄位架構示範圖資（完全符合交通部公路局警52標誌格式）
     const DEFAULT_ROAD_RECORDS = [
       {
         "公路編號": "台1線",
@@ -756,6 +773,7 @@
       }
     ];
 
+    // 全局狀態管理
     const state = {
       allRecords: [],
       filteredRecords: [],
@@ -781,7 +799,7 @@
       let lat = null;
       let lng = null;
 
-      // 嚴格對照公路局 WGS84 欄位
+      // 嚴格對照公路局標準 WGS84 欄位
       if (row['坐標-N-WGS84'] && row['坐標-E-WGS84']) {
         lat = parseFloat(row['坐標-N-WGS84']);
         lng = parseFloat(row['坐標-E-WGS84']);
@@ -792,7 +810,6 @@
         lat = parseFloat(row['Lat']);
         lng = parseFloat(row['Lng']);
       } else {
-        // Fallback 尋找可能含座標的欄位名稱
         for (let k in row) {
           const lk = k.toLowerCase();
           if ((lk.includes('lat') || k.includes('緯')) && !lat) {
@@ -806,7 +823,7 @@
         }
       }
 
-      // 台灣座標防呆驗證 (Lat 21~26.5, Lng 118~123)
+      // 台灣座標防呆防反轉檢驗 (緯度 21~26.5, 經度 118~123)
       if (lat && lng && !isNaN(lat) && !isNaN(lng)) {
         if (lat > 118 && lat < 123 && lng > 21 && lng < 26.5) {
           const tmp = lat;
@@ -821,23 +838,23 @@
     }
 
     function initMap() {
-      // 預設中心點置於台灣本島 (23.9738, 120.9820)，縮放等級 8
+      // 預設中心點置於台灣本島中央 (23.9738, 120.9820)，縮放等級 8
       state.map = L.map('map', {
         center: [23.9738, 120.9820],
         zoom: 8,
         zoomControl: false
       });
 
-      // 指定使用 OpenStreetMap 官方瓦片圖資
+      // 官方 OpenStreetMap 公開瓦片圖層（完全免 API Key、免註冊驗證）
       L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         maxZoom: 19,
         attribution: '&copy; <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener">OpenStreetMap</a> contributors'
       }).addTo(state.map);
 
-      // 右下角縮放控制器
+      // 右下角縮放控制元件
       L.control.zoom({ position: 'bottomright' }).addTo(state.map);
 
-      // 建立 MarkerClusterGroup
+      // 建立 MarkerClusterGroup，處理上千個測速點平滑縮放
       state.markerClusterGroup = L.markerClusterGroup({
         chunkedLoading: true,
         maxClusterRadius: 45,
@@ -850,6 +867,8 @@
 
     function buildPopupHtml(item, index) {
       let rowsHtml = '';
+      
+      // 官方標準 23 個欄位優先排序
       const prioritizedKeys = [
         '公路編號', '起點樁號', '牌面方向', '牌面內容',
         '隸屬縣市', '隸屬鄉鎮', '隸屬村里', '管養單位',
@@ -872,7 +891,7 @@
         }
       });
 
-      // 渲染任何其他存在於原始 CSV 的非預設欄位 (100% 忠實呈現，絕不刪漏)
+      // 渲染任何其他存在於 CSV 中的自訂欄位（100% 原始呈現）
       Object.keys(item).forEach(k => {
         if (!renderedSet.has(k) && k !== '_internal_id' && k !== '_coords') {
           rowsHtml += `
@@ -933,9 +952,9 @@
         const icon = L.divIcon({
           className: 'leaflet-data-marker',
           html: `<div class="custom-cam-pin"><i class="fa-solid fa-camera"></i></div>`,
-          iconSize: [32, 32],
-          iconAnchor: [16, 16],
-          popupAnchor: [0, -16]
+          iconSize: [30, 30],
+          iconAnchor: [15, 15],
+          popupAnchor: [0, -15]
         });
 
         const marker = L.marker([item._coords.lat, item._coords.lng], { icon: icon });
@@ -957,13 +976,13 @@
           <div class="h-64 flex flex-col items-center justify-center text-slate-400 text-center p-6">
             <i class="fa-solid fa-database text-4xl mb-3 text-slate-300"></i>
             <p class="font-medium text-sm text-slate-600">無符合條件的取締點</p>
-            <p class="text-xs mt-1 text-slate-400">請嘗試清除關鍵字或調整篩選選單</p>
+            <p class="text-xs mt-1 text-slate-400">請嘗試清除關鍵字或調整篩選條件</p>
           </div>
         `;
         return;
       }
 
-      // 渲染前 150 筆卡片以維持 DOM 流暢度
+      // 渲染前 150 筆卡片以保持 UI 高速流暢
       const renderBatch = state.filteredRecords.slice(0, 150);
       let cardsHtml = '';
 
@@ -1142,7 +1161,7 @@
       const file = e.target.files[0];
       if (!file) return;
 
-      showLoading('讀取上傳之 CSV 圖資...');
+      showLoading('讀取本機 CSV 圖資中...');
 
       Papa.parse(file, {
         header: true,
@@ -1154,13 +1173,12 @@
             const statusText = document.getElementById('dataStatusText');
             statusText.innerText = `已載入: ${file.name}`;
           } else {
-            alert('CSV 內容為空或無法解析。');
-            hideLoading();
+            const overlay = document.getElementById('loadingOverlay');
+            overlay.classList.add('hidden');
           }
         },
         error: function(err) {
           console.error(err);
-          alert('CSV 載入失敗: ' + err.message);
           hideLoading();
         }
       });
@@ -1186,13 +1204,13 @@
     }
 
     function setupEventListeners() {
-      // Local CSV Upload
+      // 本機 CSV 上傳
       document.getElementById('csvFileInput').addEventListener('change', handleCsvFileSelect);
 
-      // Sidebar Toggle
+      // 側邊欄開關
       document.getElementById('toggleSidebarBtn').addEventListener('click', () => toggleSidebar());
 
-      // Search Inputs
+      // 搜尋事件
       const searchInput = document.getElementById('searchInput');
       const clearSearchBtn = document.getElementById('clearSearchBtn');
 
@@ -1211,12 +1229,12 @@
         applyFilters();
       });
 
-      // Filter Selects
+      // 篩選下拉選單事件
       document.getElementById('countyFilter').addEventListener('change', applyFilters);
       document.getElementById('routeFilter').addEventListener('change', applyFilters);
       document.getElementById('directionFilter').addEventListener('change', applyFilters);
 
-      // Reset
+      // 重設篩選條件
       document.getElementById('resetFiltersBtn').addEventListener('click', () => {
         document.getElementById('searchInput').value = '';
         document.getElementById('countyFilter').value = '';
@@ -1227,7 +1245,7 @@
         applyFilters();
       });
 
-      // Map Quick Tools
+      // 回全台視野
       document.getElementById('fitAllBtn').addEventListener('click', () => {
         if (state.markerClusterGroup.getLayers().length > 0) {
           state.map.fitBounds(state.markerClusterGroup.getBounds().pad(0.08));
@@ -1236,9 +1254,9 @@
         }
       });
 
+      // 瀏覽器 GPS 定位（原生 Geolocation API，免 API Key）
       document.getElementById('locateMeBtn').addEventListener('click', () => {
         if (!navigator.geolocation) {
-          alert('您的瀏覽器不支援定位功能。');
           return;
         }
         navigator.geolocation.getCurrentPosition(
@@ -1256,13 +1274,13 @@
             }).addTo(state.map).bindPopup('您的目前位置').openPopup();
           },
           (err) => {
-            alert('無法取得定位：' + err.message);
+            console.warn('Geolocation error:', err);
           }
         );
       });
     }
 
-    // App Bootstrapping
+    // 頁面初始化
     window.addEventListener('DOMContentLoaded', () => {
       initMap();
       setupEventListeners();
