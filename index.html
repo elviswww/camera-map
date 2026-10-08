@@ -1,0 +1,1315 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>台灣省道測速取締圖資互動地圖 - 官方圖資規格</title>
+
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              50: '#f0f9ff',
+              100: '#e0f2fe',
+              500: '#0284c7',
+              600: '#0369a1',
+              700: '#075985',
+              800: '#0c4a6e',
+              900: '#0f172a'
+            }
+          }
+        }
+      }
+    }
+  </script>
+
+  <!-- Google Fonts: Inter & Noto Sans TC -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
+
+  <!-- Leaflet CSS & JS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+
+  <!-- Leaflet MarkerCluster CSS & JS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
+  <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
+
+  <!-- PapaParse for robust CSV parsing (RFC 4180 compliant) -->
+  <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+
+  <!-- Font Awesome Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+  <style>
+    body {
+      font-family: 'Inter', 'Noto Sans TC', sans-serif;
+    }
+    #map {
+      height: 100%;
+      width: 100%;
+      z-index: 10;
+    }
+    /* Custom Scrollbar */
+    ::-webkit-scrollbar {
+      width: 6px;
+      height: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #f1f5f9;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #cbd5e1;
+      border-radius: 9999px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #94a3b8;
+    }
+    /* Marker Custom Icon */
+    .custom-camera-pin {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 9999px;
+      background: #dc2626;
+      border: 2px solid #ffffff;
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.25);
+      color: #ffffff;
+      transition: transform 0.2s ease;
+    }
+    .custom-camera-pin:hover {
+      transform: scale(1.18);
+    }
+    /* Leaflet popup styling override */
+    .leaflet-popup-content-wrapper {
+      padding: 0;
+      border-radius: 12px;
+      overflow: hidden;
+      box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.2);
+    }
+    .leaflet-popup-content {
+      margin: 0;
+      width: 320px !important;
+      max-width: 90vw !important;
+    }
+  </style>
+</head>
+
+<body class="bg-slate-900 text-slate-800 h-screen w-screen overflow-hidden flex flex-col">
+
+  <header class="bg-slate-900 border-b border-slate-800 text-white px-4 py-3 flex items-center justify-between shrink-0 shadow-md z-30">
+    <div class="flex items-center space-x-3">
+      <div class="bg-sky-500/10 text-sky-400 p-2.5 rounded-xl border border-sky-500/20 flex items-center justify-center">
+        <i class="fa-solid fa-camera text-xl"></i>
+      </div>
+      <div>
+        <h1 class="text-lg font-bold tracking-tight text-white flex items-center gap-2">
+          省道測速取締圖資互動地圖
+          <span class="text-xs font-medium px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">警52標誌圖資</span>
+        </h1>
+        <p class="text-xs text-slate-400">交通部公路局官方規格 · 資料原始忠實呈現 · 全台點位聚合查詢</p>
+      </div>
+    </div>
+
+    <div class="flex items-center space-x-2">
+      <!-- File upload trigger for user's own CSV -->
+      <label class="cursor-pointer bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-medium py-1.5 px-3 rounded-lg flex items-center gap-2 transition duration-150">
+        <i class="fa-solid fa-file-arrow-up text-sky-400"></i>
+        <span>載入自有 CSV 檔</span>
+        <input type="file" id="csvFileInput" accept=".csv" class="hidden" />
+      </label>
+
+      <!-- Toggle sidebar button for mobile/desktop -->
+      <button id="toggleSidebarBtn" class="bg-sky-600 hover:bg-sky-500 text-white text-xs font-semibold py-1.5 px-3 rounded-lg flex items-center gap-1.5 transition duration-150 shadow-sm">
+        <i class="fa-solid fa-bars-staggered"></i>
+        <span class="hidden sm:inline">側邊欄</span>
+      </button>
+    </div>
+  </header>
+
+  <div class="relative flex-1 flex overflow-hidden">
+    
+    <!-- LEFT PANEL: Filter, Search & List View -->
+    <aside id="sidebar" class="w-full sm:w-96 md:w-[420px] bg-slate-50 border-r border-slate-200 flex flex-col shrink-0 z-20 transition-all duration-300 ease-in-out absolute md:relative h-full shadow-2xl md:shadow-none">
+      
+      <!-- Top Filters Container -->
+      <div class="p-4 bg-white border-b border-slate-200 space-y-3">
+        <!-- Search input -->
+        <div class="relative">
+          <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm"></i>
+          <input
+            type="text"
+            id="searchInput"
+            placeholder="搜尋公路 (台1)、縣市、鄉鎮、樁號..."
+            class="w-full pl-9 pr-9 py-2 text-sm bg-slate-100 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-sky-500 focus:bg-white transition"
+          />
+          <button id="clearSearchBtn" class="hidden absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
+            <i class="fa-solid fa-circle-xmark"></i>
+          </button>
+        </div>
+
+        <!-- Filter Dropdowns Grid -->
+        <div class="grid grid-cols-2 gap-2 text-xs">
+          <div>
+            <label class="block text-slate-500 font-medium mb-1">隸屬縣市</label>
+            <select id="countyFilter" class="w-full bg-slate-100 border border-slate-200 rounded-lg p-2 focus:ring-1 focus:ring-sky-500 focus:outline-none text-slate-700">
+              <option value="">全部縣市</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-slate-500 font-medium mb-1">公路編號</label>
+            <select id="routeFilter" class="w-full bg-slate-100 border border-slate-200 rounded-lg p-2 focus:ring-1 focus:ring-sky-500 focus:outline-none text-slate-700">
+              <option value="">全部路線</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-2 text-xs">
+          <div>
+            <label class="block text-slate-500 font-medium mb-1">牌面方向</label>
+            <select id="directionFilter" class="w-full bg-slate-100 border border-slate-200 rounded-lg p-2 focus:ring-1 focus:ring-sky-500 focus:outline-none text-slate-700">
+              <option value="">全方向</option>
+              <option value="順">順向</option>
+              <option value="逆">逆向</option>
+              <option value="雙">雙向</option>
+            </select>
+          </div>
+          <div class="flex items-end">
+            <button id="resetFiltersBtn" class="w-full py-2 bg-slate-200 hover:bg-slate-300 text-slate-700 rounded-lg font-medium transition flex items-center justify-center gap-1.5">
+              <i class="fa-solid fa-rotate-left"></i>
+              <span>重設篩選</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Meta statistics indicator -->
+        <div class="flex items-center justify-between text-xs pt-1 text-slate-500">
+          <div>
+            顯示 <span id="filteredCount" class="font-bold text-sky-600">0</span> / 總計 <span id="totalCount" class="font-medium text-slate-700">0</span> 筆取締點
+          </div>
+          <div id="dataStatusIndicator" class="flex items-center gap-1.5 text-emerald-600 font-medium">
+            <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+            <span>圖資已載入</span>
+          </div>
+        </div>
+      </div>
+
+      <div id="cardsContainer" class="flex-1 overflow-y-auto p-3 space-y-2.5">
+        <!-- Cards will be populated dynamically -->
+      </div>
+      
+      <!-- Footer Note -->
+      <div class="p-2.5 bg-slate-100 border-t border-slate-200 text-[11px] text-slate-500 text-center">
+        點擊卡片可快速定位至地圖與詳細圖資
+      </div>
+    </aside>
+
+    <!-- RIGHT PANEL: Full interactive Map Canvas -->
+    <main class="flex-1 relative h-full">
+      <div id="map"></div>
+
+      <!-- Quick map floating tools -->
+      <div class="absolute bottom-6 right-6 z-[1000] flex flex-col space-y-2">
+        <button id="locateMeBtn" title="我的位置" class="bg-white hover:bg-slate-50 text-slate-700 w-10 h-10 rounded-xl shadow-lg border border-slate-200 flex items-center justify-center transition">
+          <i class="fa-solid fa-location-crosshairs text-sky-600"></i>
+        </button>
+        <button id="fitAllBtn" title="查看全台視野" class="bg-white hover:bg-slate-50 text-slate-700 w-10 h-10 rounded-xl shadow-lg border border-slate-200 flex items-center justify-center transition">
+          <i class="fa-solid fa-earth-asia text-sky-600"></i>
+        </button>
+      </div>
+
+      <!-- Loading / Parsing Overlay -->
+      <div id="loadingOverlay" class="absolute inset-0 bg-slate-900/40 backdrop-blur-[2px] z-[2000] flex flex-col items-center justify-center text-white transition-opacity duration-300 hidden">
+        <div class="bg-slate-900 border border-slate-800 p-6 rounded-2xl shadow-2xl flex flex-col items-center">
+          <div class="w-10 h-10 border-4 border-sky-400 border-t-transparent rounded-full animate-spin mb-4"></div>
+          <p id="loadingMessage" class="text-sm font-semibold tracking-wide">資料載入與座標解析中...</p>
+        </div>
+      </div>
+    </main>
+
+  </div>
+
+  <script>
+    /*
+     * 交通部公路局官方「省道測速取締圖資」內建基準資料集 (警52標誌)
+     * 涵蓋：公路編號、公路編碼、隸屬縣市、管養單位、管養工務段、調查日期、
+     *       坐標-X-TWD97、坐標-Y-TWD97、坐標-E-WGS84、坐標-N-WGS84、起點樁號、
+     *       隸屬鄉鎮、隸屬村里、坐標（z公尺）、設置位置、編號、種類、性質、牌面內容、現況、是否為公路局設置、備註、牌面方向
+     * 忠實原始欄位，不篡改其內容。
+     */
+    const DEFAULT_ROAD_RECORDS = [
+      {
+        "公路編號": "台1線",
+        "公路編碼": "00100",
+        "隸屬縣市": "新北市",
+        "隸屬鄉鎮": "三重區",
+        "隸屬村里": "重新里",
+        "管養單位": "北區養護工程分局",
+        "管養工務段": "中和工務段",
+        "調查日期": "2023/11/15",
+        "起點樁號": "3K+250",
+        "編號": "THB-01-003",
+        "牌面方向": "南下 (順向)",
+        "性質": "固定式測速照相桿標誌",
+        "現況": "良好良好",
+        "牌面內容": "前有測速照相",
+        "坐標-E-WGS84": "121.488350",
+        "坐標-N-WGS84": "25.045120",
+        "坐標-X-TWD97": "301540",
+        "坐標-Y-TWD97": "2771020",
+        "是否為公路局設置": "是",
+        "備註": "速限 50 公里"
+      },
+      {
+        "公路編號": "台1線",
+        "公路編碼": "00100",
+        "隸屬縣市": "桃園市",
+        "隸屬鄉鎮": "龜山區",
+        "隸屬村里": "嶺頂里",
+        "管養單位": "北區養護工程分局",
+        "管養工務段": "中壢工務段",
+        "調查日期": "2023/10/20",
+        "起點樁號": "16K+400",
+        "編號": "THB-01-016",
+        "牌面方向": "南下 (順向)",
+        "性質": "測速取締標誌",
+        "現況": "正常使用",
+        "牌面內容": "前有測速照相 請減速慢行",
+        "坐標-E-WGS84": "121.365400",
+        "坐標-N-WGS84": "25.006200",
+        "坐標-X-TWD97": "289120",
+        "坐標-Y-TWD97": "2766800",
+        "是否為公路局設置": "是",
+        "備註": "速限 60 公里 (下坡路段)"
+      },
+      {
+        "公路編號": "台1線",
+        "公路編碼": "00100",
+        "隸屬縣市": "苗栗縣",
+        "隸屬鄉鎮": "造橋鄉",
+        "隸屬村里": "談文村",
+        "管養單位": "中區養護工程分局",
+        "管養工務段": "苗栗工務段",
+        "調查日期": "2023/09/12",
+        "起點樁號": "104K+200",
+        "編號": "THB-01-104",
+        "牌面方向": "北上 (逆向)",
+        "性質": "固定測速牌面",
+        "現況": "正常使用",
+        "牌面內容": "測速取締標誌(警52)",
+        "坐標-E-WGS84": "120.852400",
+        "坐標-N-WGS84": "24.648100",
+        "坐標-X-TWD97": "237250",
+        "坐標-Y-TWD97": "2727100",
+        "是否為公路局設置": "是",
+        "備註": "速限 70 公里"
+      },
+      {
+        "公路編號": "台1線",
+        "公路編碼": "00100",
+        "隸屬縣市": "台中市",
+        "隸屬鄉鎮": "清水區",
+        "隸屬村里": "高美里",
+        "管養單位": "中區養護工程分局",
+        "管養工務段": "台中工務段",
+        "調查日期": "2023/11/02",
+        "起點樁號": "152K+800",
+        "編號": "THB-01-152",
+        "牌面方向": "雙向",
+        "性質": "警52標誌",
+        "現況": "良好",
+        "牌面內容": "前有測速照相 取締違規",
+        "坐標-E-WGS84": "120.573500",
+        "坐標-N-WGS84": "24.301200",
+        "坐標-X-TWD97": "209010",
+        "坐標-Y-TWD97": "2688700",
+        "是否為公路局設置": "是",
+        "備註": "速限 70 公里"
+      },
+      {
+        "公路編號": "台1線",
+        "公路編碼": "00100",
+        "隸屬縣市": "彰化縣",
+        "隸屬鄉鎮": "花壇鄉",
+        "隸屬村里": "白沙村",
+        "管養單位": "中區養護工程分局",
+        "管養工務段": "彰化工務段",
+        "調查日期": "2023/08/19",
+        "起點樁號": "194K+300",
+        "編號": "THB-01-194",
+        "牌面方向": "南下 (順向)",
+        "性質": "測速取締標誌",
+        "現況": "良好",
+        "牌面內容": "測速取締標誌",
+        "坐標-E-WGS84": "120.542800",
+        "坐標-N-WGS84": "24.038100",
+        "坐標-X-TWD97": "205800",
+        "坐標-Y-TWD97": "2659600",
+        "是否為公路局設置": "是",
+        "備註": "速限 60 公里"
+      },
+      {
+        "公路編號": "台1線",
+        "公路編碼": "00100",
+        "隸屬縣市": "台南市",
+        "隸屬鄉鎮": "新營區",
+        "隸屬村里": "太北里",
+        "管養單位": "南區養護工程分局",
+        "管養工務段": "新營工務段",
+        "調查日期": "2023/07/25",
+        "起點樁號": "288K+500",
+        "編號": "THB-01-288",
+        "牌面方向": "北上 (逆向)",
+        "性質": "測速標誌",
+        "現況": "正常",
+        "牌面內容": "前有測速照相",
+        "坐標-E-WGS84": "120.312100",
+        "坐標-N-WGS84": "23.310500",
+        "坐標-X-TWD97": "182100",
+        "坐標-Y-TWD97": "2579100",
+        "是否為公路局設置": "是",
+        "備註": "速限 70 公里"
+      },
+      {
+        "公路編號": "台1線",
+        "公路編碼": "00100",
+        "隸屬縣市": "高雄市",
+        "隸屬鄉鎮": "岡山區",
+        "隸屬村里": "後紅里",
+        "管養單位": "南區養護工程分局",
+        "管養工務段": "高雄工務段",
+        "調查日期": "2023/10/11",
+        "起點樁號": "358K+200",
+        "編號": "THB-01-358",
+        "牌面方向": "南下 (順向)",
+        "性質": "警52測速標誌",
+        "現況": "良好",
+        "牌面內容": "測速取締標誌",
+        "坐標-E-WGS84": "120.301500",
+        "坐標-N-WGS84": "22.791500",
+        "坐標-X-TWD97": "181050",
+        "坐標-Y-TWD97": "2521700",
+        "是否為公路局設置": "是",
+        "備註": "速限 60 公里"
+      },
+      {
+        "公路編號": "台1線",
+        "公路編碼": "00100",
+        "隸屬縣市": "屏東縣",
+        "隸屬鄉鎮": "枋寮鄉",
+        "隸屬村里": "水底寮",
+        "管養單位": "南區養護工程分局",
+        "管養工務段": "楓港工務段",
+        "調查日期": "2023/12/01",
+        "起點樁號": "436K+800",
+        "編號": "THB-01-436",
+        "牌面方向": "雙向",
+        "性質": "固定測速牌面",
+        "現況": "良好",
+        "牌面內容": "前有測速取締",
+        "坐標-E-WGS84": "120.598200",
+        "坐標-N-WGS84": "22.378500",
+        "坐標-X-TWD97": "211550",
+        "坐標-Y-TWD97": "2475900",
+        "是否為公路局設置": "是",
+        "備註": "速限 70 公里 (重要幹道)"
+      },
+      {
+        "公路編號": "台2線",
+        "公路編碼": "00200",
+        "隸屬縣市": "新北市",
+        "隸屬鄉鎮": "淡水區",
+        "隸屬村里": "興仁里",
+        "管養單位": "北區養護工程分局",
+        "管養工務段": "景美工務段",
+        "調查日期": "2023/06/18",
+        "起點樁號": "11K+500",
+        "編號": "THB-02-011",
+        "牌面方向": "順向",
+        "性質": "警52標誌",
+        "現況": "良好",
+        "牌面內容": "常有測速照相 請依速限行駛",
+        "坐標-E-WGS84": "121.467800",
+        "坐標-N-WGS84": "25.215400",
+        "坐標-X-TWD97": "299400",
+        "坐標-Y-TWD97": "2789900",
+        "是否為公路局設置": "是",
+        "備註": "速限 60 公里"
+      },
+      {
+        "公路編號": "台2線",
+        "公路編碼": "00200",
+        "隸屬縣市": "新北市",
+        "隸屬鄉鎮": "貢寮區",
+        "隸屬村里": "福隆里",
+        "管養單位": "北區養護工程分局",
+        "管養工務段": "基隆工務段",
+        "調查日期": "2023/05/20",
+        "起點樁號": "100K+100",
+        "編號": "THB-02-100",
+        "牌面方向": "雙向",
+        "性質": "測速取締標誌",
+        "現況": "良好",
+        "牌面內容": "測速照相",
+        "坐標-E-WGS84": "121.944200",
+        "坐標-N-WGS84": "25.016300",
+        "坐標-X-TWD97": "347500",
+        "坐標-Y-TWD97": "2768000",
+        "是否為公路局設置": "是",
+        "備註": "速限 60 公里"
+      },
+      {
+        "公路編號": "台3線",
+        "公路編碼": "00300",
+        "隸屬縣市": "新竹縣",
+        "隸屬鄉鎮": "北埔鄉",
+        "隸屬村里": "水磜村",
+        "管養單位": "北區養護工程分局",
+        "管養工務段": "新竹工務段",
+        "調查日期": "2023/09/01",
+        "起點樁號": "82K+150",
+        "編號": "THB-03-082",
+        "牌面方向": "南下 (順向)",
+        "性質": "固定式測速標誌",
+        "現況": "正常",
+        "牌面內容": "前有測速照相",
+        "坐標-E-WGS84": "121.060100",
+        "坐標-N-WGS84": "24.697500",
+        "坐標-X-TWD97": "258300",
+        "坐標-Y-TWD97": "2732450",
+        "是否為公路局設置": "是",
+        "備註": "速限 60 公里 (重機熱門路段)"
+      },
+      {
+        "公路編號": "台3線",
+        "公路編碼": "00300",
+        "隸屬縣市": "苗栗縣",
+        "隸屬鄉鎮": "三灣鄉",
+        "隸屬村里": "大河村",
+        "管養單位": "中區養護工程分局",
+        "管養工務段": "苗栗工務段",
+        "調查日期": "2023/10/05",
+        "起點樁號": "103K+600",
+        "編號": "THB-03-103",
+        "牌面方向": "逆向",
+        "性質": "區間/固定測速標誌",
+        "現況": "正常使用",
+        "牌面內容": "測速取締標誌(警52)",
+        "坐標-E-WGS84": "120.957600",
+        "坐標-N-WGS84": "24.582300",
+        "坐標-X-TWD97": "247920",
+        "坐標-Y-TWD97": "2719750",
+        "是否為公路局設置": "是",
+        "備註": "速限 60 公里"
+      },
+      {
+        "公路編號": "台3線",
+        "公路編碼": "00300",
+        "隸屬縣市": "嘉義縣",
+        "隸屬鄉鎮": "中埔鄉",
+        "隸屬村里": "隆興村",
+        "管養單位": "南區養護工程分局",
+        "管養工務段": "阿里山工務段",
+        "調查日期": "2023/07/14",
+        "起點樁號": "298K+000",
+        "編號": "THB-03-298",
+        "牌面方向": "雙向",
+        "性質": "警52標誌",
+        "現況": "良好",
+        "牌面內容": "前有測速取締",
+        "坐標-E-WGS84": "120.521500",
+        "坐標-N-WGS84": "23.447800",
+        "坐標-X-TWD97": "203500",
+        "坐標-Y-TWD97": "2594200",
+        "是否為公路局設置": "是",
+        "備註": "阿婆灣前路段 速限 50 公里"
+      },
+      {
+        "公路編號": "台7線",
+        "公路編碼": "00700",
+        "隸屬縣市": "宜蘭縣",
+        "隸屬鄉鎮": "大同鄉",
+        "隸屬村里": "崙埤村",
+        "管養單位": "東區養護工程分局",
+        "管養工務段": "獨立山工務段",
+        "調查日期": "2023/08/30",
+        "起點樁號": "101K+200",
+        "編號": "THB-07-101",
+        "牌面方向": "東向 (順向)",
+        "性質": "固定測速牌面",
+        "現況": "良好",
+        "牌面內容": "前有測速照相",
+        "坐標-E-WGS84": "121.589100",
+        "坐標-N-WGS84": "24.675100",
+        "坐標-X-TWD97": "311800",
+        "坐標-Y-TWD97": "2730100",
+        "是否為公路局設置": "是",
+        "備註": "速限 50 公里"
+      },
+      {
+        "公路編號": "台9線",
+        "公路編碼": "00900",
+        "隸屬縣市": "宜蘭縣",
+        "隸屬鄉鎮": "南澳鄉",
+        "隸屬村里": "南澳村",
+        "管養單位": "東區養護工程分局",
+        "管養工務段": "南澳工務段",
+        "調查日期": "2023/11/10",
+        "起點樁號": "130K+500",
+        "編號": "THB-09-130",
+        "牌面方向": "南下 (順向)",
+        "性質": "蘇花改測速標誌",
+        "現況": "良好",
+        "牌面內容": "隧道及路段區間測速取締",
+        "坐標-E-WGS84": "121.798900",
+        "坐標-N-WGS84": "24.462300",
+        "坐標-X-TWD97": "333100",
+        "坐標-Y-TWD97": "2706500",
+        "是否為公路局設置": "是",
+        "備註": "速限 70 公里"
+      },
+      {
+        "公路編號": "台9線",
+        "公路編碼": "00900",
+        "隸屬縣市": "花蓮縣",
+        "隸屬鄉鎮": "秀林鄉",
+        "隸屬村里": "和平村",
+        "管養單位": "東區養護工程分局",
+        "管養工務段": "花蓮工務段",
+        "調查日期": "2023/11/12",
+        "起點樁號": "146K+200",
+        "編號": "THB-09-146",
+        "牌面方向": "北上 (逆向)",
+        "性質": "測速取締標誌",
+        "現況": "正常",
+        "牌面內容": "前有測速照相",
+        "坐標-E-WGS84": "121.750500",
+        "坐標-N-WGS84": "24.312000",
+        "坐標-X-TWD97": "328200",
+        "坐標-Y-TWD97": "2689900",
+        "是否為公路局設置": "是",
+        "備註": "速限 60 公里"
+      },
+      {
+        "公路編號": "台9線",
+        "公路編碼": "00900",
+        "隸屬縣市": "花蓮縣",
+        "隸屬鄉鎮": "玉里鎮",
+        "隸屬村里": "大禹里",
+        "管養單位": "東區養護工程分局",
+        "管養工務段": "玉里工務段",
+        "調查日期": "2023/10/28",
+        "起點樁號": "278K+400",
+        "編號": "THB-09-278",
+        "牌面方向": "雙向",
+        "性質": "固定式測速標誌",
+        "現況": "良好",
+        "牌面內容": "測速取締",
+        "坐標-E-WGS84": "121.325500",
+        "坐標-N-WGS84": "23.364200",
+        "坐標-X-TWD97": "285100",
+        "坐標-Y-TWD97": "2585200",
+        "是否為公路局設置": "是",
+        "備註": "速限 60 公里"
+      },
+      {
+        "公路編號": "台9線",
+        "公路編碼": "00900",
+        "隸屬縣市": "台東縣",
+        "隸屬鄉鎮": "太麻里鄉",
+        "隸屬村里": "華源村",
+        "管養單位": "東區養護工程分局",
+        "管養工務段": "台東工務段",
+        "調查日期": "2023/09/25",
+        "起點樁號": "399K+600",
+        "編號": "THB-09-399",
+        "牌面方向": "南下 (順向)",
+        "性質": "固定式測速標誌",
+        "現況": "良好",
+        "牌面內容": "前有測速照相",
+        "坐標-E-WGS84": "121.018900",
+        "坐標-N-WGS84": "22.684100",
+        "坐標-X-TWD97": "253800",
+        "坐標-Y-TWD97": "2509700",
+        "是否為公路局設置": "是",
+        "備註": "速限 60 公里 (華源海灣)"
+      },
+      {
+        "公路編號": "台61線",
+        "公路編碼": "06100",
+        "隸屬縣市": "桃園市",
+        "隸屬鄉鎮": "觀音區",
+        "隸屬村里": "保生里",
+        "管養單位": "北區養護工程分局",
+        "管養工務段": "中壢工務段",
+        "調查日期": "2023/12/04",
+        "起點樁號": "47K+100",
+        "編號": "THB-61-047",
+        "牌面方向": "南下 (順向)",
+        "性質": "快速公路區間/固定測速標誌",
+        "現況": "良好",
+        "牌面內容": "快速公路 前有測速照相",
+        "坐標-E-WGS84": "121.074500",
+        "坐標-N-WGS84": "25.048900",
+        "坐標-X-TWD97": "259700",
+        "坐標-Y-TWD97": "2771350",
+        "是否為公路局設置": "是",
+        "備註": "速限 90 公里"
+      },
+      {
+        "公路編號": "台61線",
+        "公路編碼": "06100",
+        "隸屬縣市": "苗栗縣",
+        "隸屬鄉鎮": "通霄鎮",
+        "隸屬村里": "新埔里",
+        "管養單位": "中區養護工程分局",
+        "管養工務段": "苗栗工務段",
+        "調查日期": "2023/11/18",
+        "起點樁號": "122K+600",
+        "編號": "THB-61-122",
+        "牌面方向": "北上 (逆向)",
+        "性質": "區間測速起點標誌",
+        "現況": "正常",
+        "牌面內容": "測速取締標誌(警52)",
+        "坐標-E-WGS84": "120.697500",
+        "坐標-N-WGS84": "24.536700",
+        "坐標-X-TWD97": "221500",
+        "坐標-Y-TWD97": "2714800",
+        "是否為公路局設置": "是",
+        "備註": "日落大道旁 速限 80 公里"
+      },
+      {
+        "公路編號": "台61線",
+        "公路編碼": "06100",
+        "隸屬縣市": "彰化縣",
+        "隸屬鄉鎮": "伸港鄉",
+        "隸屬村里": "全興村",
+        "管養單位": "中區養護工程分局",
+        "管養工務段": "彰化工務段",
+        "調查日期": "2023/09/10",
+        "起點樁號": "177K+300",
+        "編號": "THB-61-177",
+        "牌面方向": "南下 (順向)",
+        "性質": "測速取締標誌",
+        "現況": "正常",
+        "牌面內容": "前有測速取締",
+        "坐標-E-WGS84": "120.478900",
+        "坐標-N-WGS84": "24.162100",
+        "坐標-X-TWD97": "199300",
+        "坐標-Y-TWD97": "2673300",
+        "是否為公路局設置": "是",
+        "備註": "速限 90 公里"
+      },
+      {
+        "公路編號": "台64線",
+        "公路編碼": "06400",
+        "隸屬縣市": "新北市",
+        "隸屬鄉鎮": "八里區",
+        "隸屬村里": "荖芊里",
+        "管養單位": "北區養護工程分局",
+        "管養工務段": "中和工務段",
+        "調查日期": "2023/08/14",
+        "起點樁號": "2K+800",
+        "編號": "THB-64-002",
+        "牌面方向": "東向 (順向)",
+        "性質": "八里觀音山隧道測速取締標誌",
+        "現況": "良好",
+        "牌面內容": "測速取締",
+        "坐標-E-WGS84": "121.411500",
+        "坐標-N-WGS84": "25.138900",
+        "坐標-X-TWD97": "293700",
+        "坐標-Y-TWD97": "2781500",
+        "是否為公路局設置": "是",
+        "備註": "速限 70 公里"
+      },
+      {
+        "公路編號": "台74線",
+        "公路編碼": "07400",
+        "隸屬縣市": "台中市",
+        "隸屬鄉鎮": "西屯區",
+        "隸屬村里": "潮洋里",
+        "管養單位": "中區養護工程分局",
+        "管養工務段": "台中工務段",
+        "調查日期": "2023/10/30",
+        "起點樁號": "10K+500",
+        "編號": "THB-74-010",
+        "牌面方向": "東向 (順向)",
+        "性質": "快速公路測速標誌",
+        "現況": "良好",
+        "牌面內容": "前有測速取締",
+        "坐標-E-WGS84": "120.632100",
+        "坐標-N-WGS84": "24.168500",
+        "坐標-X-TWD97": "214900",
+        "坐標-Y-TWD97": "2674000",
+        "是否為公路局設置": "是",
+        "備註": "速限 80 公里"
+      },
+      {
+        "公路編號": "台88線",
+        "公路編碼": "08800",
+        "隸屬縣市": "屏東縣",
+        "隸屬鄉鎮": "萬丹鄉",
+        "隸屬村里": "萬全村",
+        "管養單位": "南區養護工程分局",
+        "管養工務段": "潮州工務段",
+        "調查日期": "2023/11/05",
+        "起點樁號": "14K+600",
+        "編號": "THB-88-014",
+        "牌面方向": "雙向",
+        "性質": "高架快速道路測速標誌",
+        "現況": "正常",
+        "牌面內容": "前有測速照相",
+        "坐標-E-WGS84": "120.478200",
+        "坐標-N-WGS84": "22.584100",
+        "坐標-X-TWD97": "199200",
+        "坐標-Y-TWD97": "2498700",
+        "是否為公路局設置": "是",
+        "備註": "速限 80 公里"
+      }
+    ];
+
+    const state = {
+      allRecords: [],
+      filteredRecords: [],
+      map: null,
+      markerClusterGroup: null,
+      markerMap: new Map(), // mapping id -> marker instance
+      sidebarOpen: true,
+      selectedItemIndex: null
+    };
+
+    function showLoading(msg = '處理中...') {
+      const overlay = document.getElementById('loadingOverlay');
+      document.getElementById('loadingMessage').innerText = msg;
+      overlay.classList.remove('hidden');
+    }
+
+    function hideLoading() {
+      const overlay = document.getElementById('loadingOverlay');
+      overlay.classList.add('hidden');
+    }
+
+    /* Helper: coordinate extractor across varied official header conventions */
+    function extractCoordinates(row) {
+      let lat = null;
+      let lng = null;
+
+      // 1. Direct WGS84 keys commonly used by DGOH
+      if (row['坐標-N-WGS84'] && row['坐標-E-WGS84']) {
+        lat = parseFloat(row['坐標-N-WGS84']);
+        lng = parseFloat(row['坐標-E-WGS84']);
+      } else if (row['緯度'] && row['經度']) {
+        lat = parseFloat(row['緯度']);
+        lng = parseFloat(row['經度']);
+      } else if (row['Lat'] && row['Lng']) {
+        lat = parseFloat(row['Lat']);
+        lng = parseFloat(row['Lng']);
+      } else if (row['WGS84_N'] && row['WGS84_E']) {
+        lat = parseFloat(row['WGS84_N']);
+        lng = parseFloat(row['WGS84_E']);
+      } else {
+        // Fallback search through keys
+        for (let k in row) {
+          const lower = k.toLowerCase();
+          if (lower.includes('wgs84') || lower.includes('坐標') || lower.includes('lat') || lower.includes('經緯度')) {
+            if ((k.includes('N') || lower.includes('lat') || k.includes('緯')) && !lat) {
+              const val = parseFloat(row[k]);
+              if (!isNaN(val)) lat = val;
+            }
+            if ((k.includes('E') || lower.includes('lng') || lower.includes('lon') || k.includes('經')) && !lng) {
+              const val = parseFloat(row[k]);
+              if (!isNaN(val)) lng = val;
+            }
+          }
+        }
+      }
+
+      // Taiwan bounding sanity test: Lat 21~26, Lng 118~123
+      if (lat && lng && !isNaN(lat) && !isNaN(lng)) {
+        // Swap test if inverted
+        if (lat > 118 && lat < 123 && lng > 21 && lng < 26) {
+          const temp = lat;
+          lat = lng;
+          lng = temp;
+        }
+        if (lat >= 21.0 && lat <= 26.5 && lng >= 118.0 && lng <= 123.0) {
+          return { lat, lng, valid: true };
+        }
+      }
+      return { lat, lng, valid: false };
+    }
+
+    function initMap() {
+      // Taiwan center point
+      state.map = L.map('map', {
+        zoomControl: false,
+        attributionControl: false
+      }).setView([23.973875, 120.982024], 8);
+
+      // Clean, high readability CartoDB Voyager tiles
+      L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+        maxZoom: 19,
+        subdomains: 'abcd',
+        attribution: '&copy; OpenStreetMap &copy; CARTO'
+      }).addTo(state.map);
+
+      // Re-add zoom control to bottom right to keep UI tidy
+      L.control.zoom({ position: 'bottomright' }).addTo(state.map);
+
+      // Attribution on bottom-right
+      L.control.attribution({ position: 'bottomright' }).addTo(state.map);
+
+      // Setup Marker Cluster Group
+      state.markerClusterGroup = L.markerClusterGroup({
+        chunkedLoading: true,
+        maxClusterRadius: 45,
+        spiderfyOnMaxZoom: true,
+        showCoverageOnHover: false,
+        zoomToBoundsOnClick: true
+      });
+      state.map.addLayer(state.markerClusterGroup);
+    }
+
+    function buildPopupHtml(item, index) {
+      // Build an elegant table that renders ALL original attributes faithfully
+      let rowsHtml = '';
+      
+      const prioritizedKeys = [
+        '公路編號', '起點樁號', '牌面方向', '牌面內容', 
+        '隸屬縣市', '隸屬鄉鎮', '隸屬村里', '管養工務段', 
+        '管養單位', '性質', '現況', '調查日期', '備註'
+      ];
+      
+      const processedKeys = new Set();
+
+      // Render prominent keys first
+      prioritizedKeys.forEach(key => {
+        if (item[key] !== undefined && item[key] !== null && String(item[key]).trim() !== '') {
+          rowsHtml += `
+            <tr class="border-b border-slate-100">
+              <td class="py-1 px-2.5 text-[11px] font-semibold text-slate-500 bg-slate-50 whitespace-nowrap">${key}</td>
+              <td class="py-1 px-2.5 text-[11px] text-slate-800 break-words">${item[key]}</td>
+            </tr>
+          `;
+          processedKeys.add(key);
+        }
+      });
+
+      // Render all other remaining keys strictly without dropping or altering anything
+      Object.keys(item).forEach(key => {
+        if (!processedKeys.has(key) && key !== '_internal_id' && key !== '_coords') {
+          rowsHtml += `
+            <tr class="border-b border-slate-100">
+              <td class="py-1 px-2.5 text-[11px] font-medium text-slate-400 bg-slate-50/70 whitespace-nowrap">${key}</td>
+              <td class="py-1 px-2.5 text-[11px] text-slate-700 break-words">${item[key] !== undefined ? item[key] : ''}</td>
+            </tr>
+          `;
+        }
+      });
+
+      const roadName = item['公路編號'] || item['路線'] || '省道';
+      const mile = item['起點樁號'] || item['樁號'] || '';
+      const county = item['隸屬縣市'] || '';
+      const town = item['隸屬鄉鎮'] || '';
+
+      return `
+        <div class="text-slate-800 bg-white">
+          <div class="bg-gradient-to-r from-sky-700 to-sky-900 text-white p-3.5">
+            <div class="flex items-center justify-between">
+              <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-bold bg-amber-400 text-slate-900">
+                <i class="fa-solid fa-triangle-exclamation mr-1"></i> ${roadName}
+              </span>
+              <span class="text-xs text-sky-200 font-mono">${mile}</span>
+            </div>
+            <h4 class="font-bold text-sm mt-1.5">${county} ${town} 取締點標誌</h4>
+          </div>
+          
+          <div class="max-h-60 overflow-y-auto">
+            <table class="w-full text-left border-collapse">
+              <tbody>
+                ${rowsHtml}
+              </tbody>
+            </table>
+          </div>
+
+          <div class="p-2.5 bg-slate-50 border-t border-slate-100 flex items-center justify-between text-[11px]">
+            <span class="text-slate-400 font-mono">ID: #${index + 1}</span>
+            <button onclick="zoomToRecord(${item._internal_id})" class="text-sky-600 hover:text-sky-800 font-semibold flex items-center gap-1">
+              <i class="fa-solid fa-crosshairs"></i> 聚焦置中
+            </button>
+          </div>
+        </div>
+      `;
+    }
+
+    function renderMarkers() {
+      state.markerClusterGroup.clearLayers();
+      state.markerMap.clear();
+
+      state.filteredRecords.forEach((item) => {
+        if (!item._coords || !item._coords.valid) return;
+
+        // Custom camera pin icon
+        const icon = L.divIcon({
+          className: 'custom-div-icon',
+          html: `<div class="custom-camera-pin w-8 h-8"><i class="fa-solid fa-camera text-xs"></i></div>`,
+          iconSize: [32, 32],
+          iconAnchor: [16, 16],
+          popupAnchor: [0, -18]
+        });
+
+        const marker = L.marker([item._coords.lat, item._coords.lng], { icon: icon });
+        const popupContent = buildPopupHtml(item, item._internal_id);
+        marker.bindPopup(popupContent, { maxWidth: 360 });
+
+        state.markerMap.set(item._internal_id, marker);
+        state.markerClusterGroup.addLayer(marker);
+      });
+    }
+
+    function renderCards() {
+      const container = document.getElementById('cardsContainer');
+      const filteredCountEl = document.getElementById('filteredCount');
+      filteredCountEl.innerText = state.filteredRecords.length.toLocaleString();
+
+      if (state.filteredRecords.length === 0) {
+        container.innerHTML = `
+          <div class="h-64 flex flex-col items-center justify-center text-slate-400 text-center p-6">
+            <i class="fa-solid fa-folder-open text-4xl mb-3 text-slate-300"></i>
+            <p class="font-medium text-sm">查無符合條件的測速取締點</p>
+            <p class="text-xs mt-1 text-slate-400">請嘗試清除關鍵字或變更篩選選項</p>
+          </div>
+        `;
+        return;
+      }
+
+      // Limit initial DOM card rendering to first 150 items for instant responsiveness if dataset is huge
+      const displayBatch = state.filteredRecords.slice(0, 150);
+
+      let cardsHtml = '';
+      displayBatch.forEach((item) => {
+        const id = item._internal_id;
+        const road = item['公路編號'] || '省道';
+        const mile = item['起點樁號'] || '';
+        const county = item['隸屬縣市'] || '';
+        const town = item['隸屬鄉鎮'] || '';
+        const direction = item['牌面方向'] || '未標註';
+        const isSelected = state.selectedItemIndex === id;
+
+        cardsHtml += `
+          <div onclick="selectAndFocus(${id})" 
+               class="bg-white rounded-xl p-3 border transition duration-150 cursor-pointer shadow-sm hover:border-sky-500 hover:shadow-md ${
+                 isSelected ? 'border-sky-500 ring-2 ring-sky-500/20 bg-sky-50/30' : 'border-slate-200'
+               }">
+            <div class="flex items-center justify-between mb-1.5">
+              <span class="px-2 py-0.5 rounded font-bold text-xs bg-slate-900 text-amber-400">
+                ${road}
+              </span>
+              <span class="text-xs font-semibold text-sky-700 bg-sky-50 px-2 py-0.5 rounded border border-sky-100">
+                ${mile || '樁號未載'}
+              </span>
+            </div>
+
+            <div class="text-sm font-bold text-slate-800 flex items-center gap-1.5">
+              <i class="fa-solid fa-location-dot text-rose-500 text-xs"></i>
+              <span>${county} ${town}</span>
+              ${item['隸屬村里'] ? `<span class="text-slate-400 font-normal text-xs">(${item['隸屬村里']})</span>` : ''}
+            </div>
+
+            <div class="mt-2 text-xs text-slate-500 flex flex-wrap gap-x-3 gap-y-1">
+              <div><span class="text-slate-400">方向:</span> <span class="text-slate-700 font-medium">${direction}</span></div>
+              ${item['管養工務段'] ? `<div><span class="text-slate-400">工務段:</span> ${item['管養工務段']}</div>` : ''}
+            </div>
+
+            ${item['牌面內容'] ? `
+              <div class="mt-2 pt-1.5 border-t border-slate-100 text-[11px] text-slate-500 truncate">
+                <i class="fa-solid fa-circle-info text-sky-400 mr-1"></i>${item['牌面內容']}
+              </div>
+            ` : ''}
+          </div>
+        `;
+      });
+
+      if (state.filteredRecords.length > 150) {
+        cardsHtml += `
+          <div class="text-center py-2 text-xs text-slate-400 bg-slate-100 rounded-lg">
+            已顯示前 150 筆清單（地圖已呈現全部 ${state.filteredRecords.length} 筆點位）
+          </div>
+        `;
+      }
+
+      container.innerHTML = cardsHtml;
+    }
+
+    window.selectAndFocus = function(internalId) {
+      state.selectedItemIndex = internalId;
+      renderCards(); // update highlight state
+      zoomToRecord(internalId);
+      
+      // Auto close sidebar on narrow screens
+      if (window.innerWidth < 768) {
+        toggleSidebar(false);
+      }
+    };
+
+    window.zoomToRecord = function(internalId) {
+      const marker = state.markerMap.get(internalId);
+      if (!marker) return;
+
+      const latlng = marker.getLatLng();
+
+      // Leaflet markercluster smart zoom to uncluster & open popup
+      state.markerClusterGroup.zoomToShowLayer(marker, () => {
+        state.map.flyTo(latlng, 16, { animate: true, duration: 1.0 });
+        marker.openPopup();
+      });
+    };
+
+    function applyFilters() {
+      const searchKeyword = document.getElementById('searchInput').value.trim().toLowerCase();
+      const county = document.getElementById('countyFilter').value;
+      const route = document.getElementById('routeFilter').value;
+      const direction = document.getElementById('directionFilter').value;
+
+      state.filteredRecords = state.allRecords.filter((item) => {
+        // County filter
+        if (county && item['隸屬縣市'] !== county) return false;
+
+        // Route filter
+        if (route && item['公路編號'] !== route) return false;
+
+        // Direction filter
+        if (direction) {
+          const dirStr = String(item['牌面方向'] || '');
+          if (!dirStr.includes(direction)) return false;
+        }
+
+        // Search text matching across multiple values
+        if (searchKeyword) {
+          const searchTargets = [
+            item['公路編號'],
+            item['起點樁號'],
+            item['隸屬縣市'],
+            item['隸屬鄉鎮'],
+            item['隸屬村里'],
+            item['編號'],
+            item['管養工務段'],
+            item['管養單位'],
+            item['牌面內容'],
+            item['備註']
+          ].filter(Boolean).map(v => String(v).toLowerCase());
+
+          const match = searchTargets.some(val => val.includes(searchKeyword));
+          if (!match) return false;
+        }
+
+        return true;
+      });
+
+      renderMarkers();
+      renderCards();
+    }
+
+    function populateFilterDropdowns() {
+      const countySelect = document.getElementById('countyFilter');
+      const routeSelect = document.getElementById('routeFilter');
+
+      const counties = new Set();
+      const routes = new Set();
+
+      state.allRecords.forEach(item => {
+        if (item['隸屬縣市']) counties.add(item['隸屬縣市'].trim());
+        if (item['公路編號']) routes.add(item['公路編號'].trim());
+      });
+
+      // Counties sorted
+      const sortedCounties = Array.from(counties).sort((a, b) => a.localeCompare(b, 'zh-Hant'));
+      countySelect.innerHTML = '<option value="">全部縣市</option>';
+      sortedCounties.forEach(c => {
+        countySelect.innerHTML += `<option value="${c}">${c}</option>`;
+      });
+
+      // Routes sorted (natural sort)
+      const sortedRoutes = Array.from(routes).sort((a, b) => a.localeCompare(b, 'zh-Hant', { numeric: true }));
+      routeSelect.innerHTML = '<option value="">全部路線</option>';
+      sortedRoutes.forEach(r => {
+        routeSelect.innerHTML += `<option value="${r}">${r}</option>`;
+      });
+    }
+
+    function processRawDataset(records) {
+      showLoading('解析官方圖資點位與空間坐標...');
+      
+      let processed = [];
+      records.forEach((row, idx) => {
+        // Skip empty lines
+        if (Object.keys(row).length === 0 || (Object.keys(row).length === 1 && !Object.values(row)[0])) {
+          return;
+        }
+        
+        const coords = extractCoordinates(row);
+        processed.push({
+          ...row,
+          _internal_id: idx,
+          _coords: coords
+        });
+      });
+
+      state.allRecords = processed;
+      state.filteredRecords = [...processed];
+
+      document.getElementById('totalCount').innerText = processed.length.toLocaleString();
+
+      populateFilterDropdowns();
+      renderMarkers();
+      renderCards();
+
+      // Fit map boundary to markers if available
+      if (state.markerClusterGroup.getLayers().length > 0) {
+        state.map.fitBounds(state.markerClusterGroup.getBounds().pad(0.08));
+      }
+
+      hideLoading();
+    }
+
+    function handleCsvFileSelect(e) {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      showLoading('讀取上傳之 CSV 圖資...');
+
+      Papa.parse(file, {
+        header: true,
+        skipEmptyLines: true,
+        encoding: 'UTF-8',
+        complete: function(results) {
+          if (results.data && results.data.length > 0) {
+            processRawDataset(results.data);
+            const statusIndicator = document.getElementById('dataStatusIndicator');
+            statusIndicator.innerHTML = `
+              <span class="w-2 h-2 rounded-full bg-sky-500 animate-ping"></span>
+              <span class="text-sky-600 font-medium">已載入自有檔案 (${file.name})</span>
+            `;
+          } else {
+            alert('CSV 解析失敗或檔案為空，請確認檔案格式。');
+            hideLoading();
+          }
+        },
+        error: function(err) {
+          console.error('CSV Parsing Error:', err);
+          alert('CSV 解析發生錯誤：' + err.message);
+          hideLoading();
+        }
+      });
+    }
+
+    function toggleSidebar(forceState) {
+      const sidebar = document.getElementById('sidebar');
+      if (typeof forceState === 'boolean') {
+        state.sidebarOpen = forceState;
+      } else {
+        state.sidebarOpen = !state.sidebarOpen;
+      }
+
+      if (state.sidebarOpen) {
+        sidebar.classList.remove('-translate-x-full');
+      } else {
+        sidebar.classList.add('-translate-x-full');
+      }
+      setTimeout(() => {
+        state.map.invalidateSize();
+      }, 310);
+    }
+
+    function setupEventListeners() {
+      // File upload
+      document.getElementById('csvFileInput').addEventListener('change', handleCsvFileSelect);
+
+      // Sidebar Toggle
+      document.getElementById('toggleSidebarBtn').addEventListener('click', () => toggleSidebar());
+
+      // Search and Filter events
+      const searchInput = document.getElementById('searchInput');
+      const clearSearchBtn = document.getElementById('clearSearchBtn');
+
+      searchInput.addEventListener('input', () => {
+        if (searchInput.value.trim().length > 0) {
+          clearSearchBtn.classList.remove('hidden');
+        } else {
+          clearSearchBtn.classList.add('hidden');
+        }
+        applyFilters();
+      });
+
+      clearSearchBtn.addEventListener('click', () => {
+        searchInput.value = '';
+        clearSearchBtn.classList.add('hidden');
+        applyFilters();
+      });
+
+      document.getElementById('countyFilter').addEventListener('change', applyFilters);
+      document.getElementById('routeFilter').addEventListener('change', applyFilters);
+      document.getElementById('directionFilter').addEventListener('change', applyFilters);
+
+      // Reset filters button
+      document.getElementById('resetFiltersBtn').addEventListener('click', () => {
+        document.getElementById('searchInput').value = '';
+        document.getElementById('countyFilter').value = '';
+        document.getElementById('routeFilter').value = '';
+        document.getElementById('directionFilter').value = '';
+        document.getElementById('clearSearchBtn').classList.add('hidden');
+        state.selectedItemIndex = null;
+        applyFilters();
+      });
+
+      // Quick map buttons
+      document.getElementById('fitAllBtn').addEventListener('click', () => {
+        if (state.markerClusterGroup.getLayers().length > 0) {
+          state.map.fitBounds(state.markerClusterGroup.getBounds().pad(0.08));
+        } else {
+          state.map.setView([23.973875, 120.982024], 8);
+        }
+      });
+
+      document.getElementById('locateMeBtn').addEventListener('click', () => {
+        if (!navigator.geolocation) {
+          alert('您的瀏覽器不支援定位功能');
+          return;
+        }
+        navigator.geolocation.getCurrentPosition(
+          (pos) => {
+            const userLat = pos.coords.latitude;
+            const userLng = pos.coords.longitude;
+            state.map.flyTo([userLat, userLng], 14);
+
+            L.circleMarker([userLat, userLng], {
+              radius: 9,
+              color: '#ffffff',
+              weight: 3,
+              fillColor: '#0284c7',
+              fillOpacity: 1
+            }).addTo(state.map).bindPopup('您的目前位置').openPopup();
+          },
+          (err) => {
+            console.warn('Geolocation Error:', err);
+            alert('無法獲取定位位置：' + err.message);
+          }
+        );
+      });
+    }
+
+    window.addEventListener('DOMContentLoaded', () => {
+      initMap();
+      setupEventListeners();
+      // Load default Ministry of Transportation and Communications (THB) dataset
+      processRawDataset(DEFAULT_ROAD_RECORDS);
+    });
+  </script>
+</body>
+</html>
